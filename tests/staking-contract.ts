@@ -182,6 +182,8 @@ describe("Stake", () => {
     let staking_token = mintAddress;
     let stake_action = true;
 
+    let pool_action_entry = new anchor.web3.Keypair();
+
     await program.rpc.performAction(
       new anchor.BN(staking_amount),
       staking_token,
@@ -192,6 +194,7 @@ describe("Stake", () => {
           tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           poolAction: pool_action_account.publicKey,
+          poolEntry: pool_action_entry.publicKey,
           stakerAssociatedAddress: aliceTokenAccount,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -200,7 +203,7 @@ describe("Stake", () => {
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
         // signers: [alice],
-        signers: [alice, pool_action_account],
+        signers: [alice, pool_action_account, pool_action_entry],
       }
     );
     let aliceBalance = await readAccount(aliceTokenAccount);
@@ -215,6 +218,8 @@ describe("Stake", () => {
     let staking_token = mintAddress;
     let stake_action = false;
 
+    let pool_action_entry = new anchor.web3.Keypair();
+
     await program.rpc.performAction(
       new anchor.BN(un_staking_amount),
       staking_token,
@@ -225,6 +230,7 @@ describe("Stake", () => {
           tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           poolAction: pool_action_account.publicKey,
+          poolEntry: pool_action_entry.publicKey,
           stakerAssociatedAddress: aliceTokenAccount,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -232,8 +238,7 @@ describe("Stake", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
-        // signers: [alice],
-        signers: [alice, pool_action_account],
+        signers: [alice, pool_action_account, pool_action_entry],
       }
     );
 

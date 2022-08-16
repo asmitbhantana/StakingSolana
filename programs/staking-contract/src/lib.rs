@@ -26,13 +26,15 @@ pub mod staking_contract {
        let staking_pool = &mut ctx.accounts.current_staking_pool;
        let pool_action = &mut ctx.accounts.pool_action;
 
+       let pool_action_entry = &mut ctx.accounts.pool_entry;
+
        require!(token_program.key() == action_token, ErrorCode::InvalidToken);  
 
        if stake_action {
 
         pool_action.staker = current_user.key();
-        pool_action.token_amount = action_amount;
-        pool_action.mint_start_time = 7u64; //For testing
+        pool_action.token_amount += action_amount;
+        pool_action.start_time = 7u64; //For testing
 
         let transfer_instruction = Transfer{
             from: ctx.accounts.staker_associated_address.to_account_info(),
@@ -45,7 +47,7 @@ pub mod staking_contract {
         );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
-        pool_action.staking_action = true;
+        pool_action.stake_action = true;
         staking_pool.token_amount += action_amount;
        }
 
@@ -53,7 +55,7 @@ pub mod staking_contract {
         
         require!(pool_action.staker == ctx.accounts.staker.key(), ErrorCode::InvalidUser);
         require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
-        require!(pool_action.staking_action , ErrorCode::InvalidPoolAction);
+        require!(pool_action.stake_action , ErrorCode::InvalidPoolAction);
 
         pool_action.token_amount -= action_amount;
 
@@ -77,10 +79,15 @@ pub mod staking_contract {
             );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
-        pool_action.staking_action = false;
+        pool_action.stake_action = false;
         staking_pool.token_amount -= action_amount;
-
+        
        }
+
+        pool_action_entry.stake_action = stake_action;
+        pool_action_entry.staker = current_user.key();
+        pool_action_entry.token_amount = action_amount;
+
        Ok(())
     }
 }
@@ -109,6 +116,14 @@ pub struct PerformAction<'info> {
         space = 8 + 32 + 8 + 8 + 1
     )]
     pool_action: Account<'info, PoolAction>,
+
+
+    #[account(
+        init,
+        payer = staker,
+        space = 8 + 32 + 8 + 1
+    )]
+    pool_entry: Account<'info, PoolActionEntry>,
 
     #[account(
         init_if_needed,
@@ -146,8 +161,16 @@ pub struct StakePool {
 pub struct PoolAction{
     staker: Pubkey,
     token_amount: u64,
-    mint_start_time: u64,
-    staking_action: bool,
+    start_time: u64,
+    stake_action: bool,
+}
+
+#[account]
+#[derive(Default)]
+pub struct PoolActionEntry{
+    staker: Pubkey,
+    token_amount: u64,
+    stake_action: bool,
 }
 
 
