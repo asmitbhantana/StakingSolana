@@ -1,15 +1,15 @@
-import * as anchor from '@project-serum/anchor';
-import { Program } from '@project-serum/anchor';
-import { StakingContract } from '../target/types/staking_contract';
+import * as anchor from "@project-serum/anchor";
+import { Program } from "@project-serum/anchor";
+import { StakingContract } from "../target/types/staking_contract";
 
-import * as spl from '@solana/spl-token';
-import { assert, expect } from 'chai';
+import * as spl from "@solana/spl-token";
+import { assert, expect } from "chai";
 
 interface PDAParameters {
   stake_pool: anchor.web3.PublicKey;
 }
 
-describe('Stake', () => {
+describe("Stake", () => {
   const provider = anchor.AnchorProvider.local();
   anchor.setProvider(provider);
 
@@ -18,12 +18,14 @@ describe('Stake', () => {
   let mintAddress: anchor.web3.PublicKey;
 
   let alice: anchor.web3.Keypair;
-  let aliceTokenAccount: anchor.web3.PublicKey;
-
   let bob: anchor.web3.Keypair;
+  let aliceTokenAccount: anchor.web3.PublicKey;
   let bobTokenAccount: anchor.web3.PublicKey;
 
   let pda: PDAParameters;
+  let pool_action_account: anchor.web3.Keypair;
+
+  let stakingVaultAssociatedAddress: anchor.web3.PublicKey;
 
   //get PDA of Stake Pool
   const getPdaParams = async (
@@ -31,7 +33,7 @@ describe('Stake', () => {
   ): Promise<PDAParameters> => {
     let [stake_pool, stake_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from('stake_pool')],
+        [Buffer.from("stake_pool"), token_program.toBuffer()],
         program.programId
       );
 
@@ -146,6 +148,7 @@ describe('Stake', () => {
   };
 
   before(async () => {
+    pool_action_account = new anchor.web3.Keypair();
     //c8 mint token
     mintAddress = await createMint();
     //transfer token to alice
@@ -153,32 +156,32 @@ describe('Stake', () => {
       mintAddress,
       20000000
     );
-    //init token account for bob
+
     [bob, bobTokenAccount] = await createUserAndAssociatedWallet(
       mintAddress,
-      0
+      20000000
     );
+
     // //c8 program state account and program's token account
     pda = await getPdaParams(mintAddress);
     //check before calling program
     let aliceBalance = await readAccount(aliceTokenAccount);
-    assert.equal(aliceBalance, '20000000');
-    let bobBalance = await readAccount(bobTokenAccount);
-    assert.equal(bobBalance, '0');
-  });
+    assert.equal(aliceBalance, "20000000");
 
-  it('Staking', async () => {
-    let staking_amount = '20000000';
-    let staking_token = mintAddress;
-    let stake_action = true;
-    let pool_action_account = new anchor.web3.Keypair();
-    let stakingVaultAssociatedAddress = await spl.getAssociatedTokenAddress(
+    stakingVaultAssociatedAddress = await spl.getAssociatedTokenAddress(
       mintAddress,
       pda.stake_pool,
       true,
       spl.TOKEN_PROGRAM_ID,
       spl.ASSOCIATED_TOKEN_PROGRAM_ID
     );
+  });
+
+  it("Staking", async () => {
+    let staking_amount = "20000000";
+    let staking_token = mintAddress;
+    let stake_action = true;
+
     await program.rpc.performAction(
       new anchor.BN(staking_amount),
       staking_token,
@@ -201,6 +204,43 @@ describe('Stake', () => {
       }
     );
     let aliceBalance = await readAccount(aliceTokenAccount);
-    assert.equal(aliceBalance, '0');
+    assert.equal(aliceBalance, "0");
+
+    let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
+    assert.equal(stakingVaultBalance, staking_amount);
+  });
+
+  it("Unstaking", async () => {
+    let un_staking_amount = "5000000";
+    let staking_token = mintAddress;
+    let stake_action = false;
+
+    await program.rpc.performAction(
+      new anchor.BN(un_staking_amount),
+      staking_token,
+      stake_action,
+      {
+        accounts: {
+          staker: alice.publicKey,
+          tokenMint: mintAddress,
+          currentStakingPool: pda.stake_pool,
+          poolAction: pool_action_account.publicKey,
+          stakerAssociatedAddress: aliceTokenAccount,
+          stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+          associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        // signers: [alice],
+        signers: [alice, pool_action_account],
+      }
+    );
+
+    let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
+    assert.equal(stakingVaultBalance, "15000000");
+
+    let aliceBalance = await readAccount(aliceTokenAccount);
+    assert.equal(aliceBalance, un_staking_amount);
   });
 });

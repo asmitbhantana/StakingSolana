@@ -21,7 +21,7 @@ pub mod staking_contract {
        let current_user = ctx.accounts.staker.clone();
        let token_program = ctx.accounts.token_mint.clone();
     
-       let token_program_key = ctx.accounts.token_program.clone().key();
+       let token_mint_key = ctx.accounts.token_mint.clone().key();
        let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
        let staking_pool = &mut ctx.accounts.current_staking_pool;
        let pool_action = &mut ctx.accounts.pool_action;
@@ -45,14 +45,14 @@ pub mod staking_contract {
         );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
-        // pool_action.staking_action = true;
+        pool_action.staking_action = true;
         staking_pool.token_amount += action_amount;
        }
 
        else {
         
-        require!(pool_action.staker == ctx.accounts.staker.key(), ErrorCode::InvalidToken);
-        require!(pool_action.token_amount <= action_amount, ErrorCode::NotEnoughToken);
+        require!(pool_action.staker == ctx.accounts.staker.key(), ErrorCode::InvalidUser);
+        require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
         require!(pool_action.staking_action , ErrorCode::InvalidPoolAction);
 
         pool_action.token_amount -= action_amount;
@@ -60,7 +60,7 @@ pub mod staking_contract {
          let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
          let staking_pool_signer_seeds: &[&[_]] = &[
             b"stake_pool".as_ref(),
-            &token_program_key.as_ref(),
+            &token_mint_key.as_ref(),
             &bump_seed_staking_pool
         ];
 
@@ -97,7 +97,7 @@ pub struct PerformAction<'info> {
         space = 8 + 32 + 8,
         seeds = [
             b"stake_pool".as_ref(),
-            // token_mint.key().as_ref()
+            token_mint.key().as_ref()
         ],
         bump
     )]
@@ -122,7 +122,6 @@ pub struct PerformAction<'info> {
          mut,
         constraint= staker_associated_address.owner == staker.key(),
         constraint= staker_associated_address.mint == token_mint.key(),
-        constraint= staker_associated_address.amount >= action_amount
     )]
     staker_associated_address: Box<Account<'info, TokenAccount>>,
 
