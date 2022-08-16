@@ -16,7 +16,8 @@ pub mod staking_contract {
         ctx: Context<PerformAction>,
         action_amount: u64, 
         action_token: Pubkey,
-        stake_action: bool
+        stake_action: bool,
+        count: u8
     ) -> Result<()> {
        let current_user = ctx.accounts.staker.clone();
        let token_program = ctx.accounts.token_mint.clone();
@@ -27,6 +28,7 @@ pub mod staking_contract {
        let pool_action = &mut ctx.accounts.pool_action;
 
        let pool_action_entry = &mut ctx.accounts.pool_entry;
+       let pool_count = &mut ctx.accounts.pool_count;
 
        require!(token_program.key() == action_token, ErrorCode::InvalidToken);  
 
@@ -47,7 +49,6 @@ pub mod staking_contract {
         );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
-        pool_action.stake_action = true;
         staking_pool.token_amount += action_amount;
        }
 
@@ -55,7 +56,6 @@ pub mod staking_contract {
         
         require!(pool_action.staker == ctx.accounts.staker.key(), ErrorCode::InvalidUser);
         require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
-        require!(pool_action.stake_action , ErrorCode::InvalidPoolAction);
 
         pool_action.token_amount -= action_amount;
 
@@ -79,7 +79,6 @@ pub mod staking_contract {
             );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
-        pool_action.stake_action = false;
         staking_pool.token_amount -= action_amount;
         
        }
@@ -88,12 +87,14 @@ pub mod staking_contract {
         pool_action_entry.staker = current_user.key();
         pool_action_entry.token_amount = action_amount;
 
+        pool_count.count = count;
+
        Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(action_amount: u64, action_token: Pubkey, stake_action: bool)]
+#[instruction(action_amount: u64, action_token: Pubkey, stake_action: bool, count: u8)]
 pub struct PerformAction<'info> {
     #[account(mut)]
     staker: Signer<'info>, 
@@ -113,17 +114,40 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker, 
-        space = 8 + 32 + 8 + 8 + 1
+        space = 8 + 32 + 8 + 8 + 1,
+        seeds = [
+            b"pool_action".as_ref(),
+            staker.key().as_ref()
+        ],
+        bump
     )]
     pool_action: Account<'info, PoolAction>,
 
 
     #[account(
-        init,
+        init_if_needed,
         payer = staker,
-        space = 8 + 32 + 8 + 1
+        space = 8 + 32 + 8 + 1,
+        seeds = [
+            b"pool_entry".as_ref(),
+            staker.key().as_ref(),
+            &[count]
+        ],
+        bump
     )]
     pool_entry: Account<'info, PoolActionEntry>,
+
+    #[account(
+        init_if_needed,
+        payer = staker, 
+        space = 8 + 4,
+        seeds = [
+            b"pool_count".as_ref(),
+            staker.key().as_ref()
+        ],
+        bump
+    )]
+    pool_count: Account<'info, Count>,
 
     #[account(
         init_if_needed,
@@ -146,7 +170,6 @@ pub struct PerformAction<'info> {
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
     rent: Sysvar<'info, Rent>
-
 }
 
 #[account]
@@ -162,7 +185,6 @@ pub struct PoolAction{
     staker: Pubkey,
     token_amount: u64,
     start_time: u64,
-    stake_action: bool,
 }
 
 #[account]
@@ -173,6 +195,11 @@ pub struct PoolActionEntry{
     stake_action: bool,
 }
 
+#[account]
+#[derive(Default)]
+pub struct Count{
+    count: u8,
+}
 
 #[error_code]
 pub enum ErrorCode {
