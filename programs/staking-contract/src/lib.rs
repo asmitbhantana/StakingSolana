@@ -5,6 +5,7 @@ use anchor_spl::{
     token::{ Token, Transfer, TokenAccount, Mint}
 };
 use anchor_lang::require;
+use anchor_lang::prelude::Clock;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -86,6 +87,7 @@ pub mod staking_contract {
         pool_action_entry.stake_action = stake_action;
         pool_action_entry.staker = current_user.key();
         pool_action_entry.token_amount = action_amount;
+        pool_action_entry.time_stamp =Clock::get()?.unix_timestamp;
 
         pool_count.count = count;
 
@@ -127,7 +129,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker,
-        space = 8 + 32 + 8 + 1,
+        space = 8 + 32 + 8 + 1 + 8,
         seeds = [
             b"pool_entry".as_ref(),
             staker.key().as_ref(),
@@ -193,6 +195,7 @@ pub struct PoolActionEntry{
     staker: Pubkey,
     token_amount: u64,
     stake_action: bool,
+    time_stamp: i64
 }
 
 #[account]
@@ -215,5 +218,4 @@ pub enum ErrorCode {
 
     #[msg("Not Valid Pool Action Acccount Provided")]
     InvalidPoolAction, 
-    
 }

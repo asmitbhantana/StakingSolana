@@ -17,6 +17,7 @@ interface EntriesData {
   staker;
   amount;
   action;
+  time;
 }
 
 describe("Stake", () => {
@@ -147,6 +148,7 @@ describe("Stake", () => {
       staker: entry.staker,
       amount: entry.tokenAmount,
       action: entry.stakeAction,
+      time: entry.timeStamp,
     };
   };
 
@@ -382,6 +384,7 @@ describe("Stake", () => {
       console.log("Data Action", data_from_pda.action);
       console.log("Data Amount", data_from_pda.amount.toString());
       console.log("Data User", data_from_pda.staker.toString());
+      console.log("Data Timestamp", data_from_pda.time.toString());
     });
   });
 });
