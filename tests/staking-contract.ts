@@ -109,11 +109,12 @@ describe("Stake", () => {
   };
 
   const getEntryCountPDA = async (
-    signer: anchor.web3.PublicKey
+    signer: anchor.web3.PublicKey,
+    action_token: anchor.web3.PublicKey
   ): Promise<anchor.web3.PublicKey> => {
     let [pool_count, pool_count_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("pool_count"), signer.toBuffer()],
+        [Buffer.from("pool_count"), signer.toBuffer(), action_token.toBuffer()],
         program.programId
       );
 
@@ -293,7 +294,7 @@ describe("Stake", () => {
     console.log("here");
 
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey);
-    let pool_count_pda = await getEntryCountPDA(alice.publicKey);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, staking_token);
     let latest_count = await getLastEntryCount(alice.publicKey);
 
     console.log("pool_entry_pda", pool_entry_pda);
@@ -336,7 +337,7 @@ describe("Stake", () => {
     let stake_action = false;
 
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey);
-    let pool_count_pda = await getEntryCountPDA(alice.publicKey);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, staking_token);
     let latest_count = await getLastEntryCount(alice.publicKey);
 
     let next_count = parseInt(latest_count) + 1;

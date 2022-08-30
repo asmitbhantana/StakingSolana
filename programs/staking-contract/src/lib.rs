@@ -11,6 +11,7 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod staking_contract {
+
     use super::*;
 
     pub fn perform_action(
@@ -20,25 +21,29 @@ pub mod staking_contract {
         stake_action: bool,
         count: u8
     ) -> Result<()> {
+       let clock = Clock::get()?;
+       let current_time = clock.unix_timestamp;
+
        let current_user = ctx.accounts.staker.clone();
        let token_program = ctx.accounts.token_mint.clone();
-    
-       let token_mint_key = ctx.accounts.token_mint.clone().key();
-       let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
+              
        let staking_pool = &mut ctx.accounts.current_staking_pool;
        let pool_action = &mut ctx.accounts.pool_action;
+       let locked_pool_action = &mut ctx.accounts.lock_pool_action;
+        let withdraw_pool_action = &mut ctx.accounts.withdraw_pool_action;
 
        let pool_action_entry = &mut ctx.accounts.pool_entry;
        let pool_count = &mut ctx.accounts.pool_count;
 
        require!(token_program.key() == action_token, ErrorCode::InvalidToken);  
 
+       //Stake Action
        if stake_action {
 
-        pool_action.staker = current_user.key();
+        // Update Pool Action
         pool_action.token_amount += action_amount;
-        pool_action.start_time = 7u64; //For testing
 
+        //Transfer Funds
         let transfer_instruction = Transfer{
             from: ctx.accounts.staker_associated_address.to_account_info(),
             to: ctx.accounts.staking_vault_associated_address.to_account_info(),
@@ -50,18 +55,147 @@ pub mod staking_contract {
         );
         anchor_spl::token::transfer(cpi_ctx, action_amount)?;
 
+        //Update Staking Pool
         staking_pool.token_amount += action_amount;
+
+        //Update lock pool action
+        locked_pool_action.locked_amount.push(action_amount);
+        locked_pool_action.locked_start_time.push(current_time);
+
        }
 
+       //Withdraw Action/ Unstake Action
        else {
-        
-        require!(pool_action.staker == ctx.accounts.staker.key(), ErrorCode::InvalidUser);
-        require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
 
+        //Handle Withdraw Request
+        // Queue their withdraw to next sunday
+        // Withdraw request can only be made from monday to friday 
+        let day_of_week = (current_time/86400 + 4)%7;
+        require!(day_of_week != 1, ErrorCode::InvalidWithdrawDay);
+
+        //Update the Unlocked token
+        let locked_amounts =  locked_pool_action.locked_amount.clone();
+        let locked_start_times =  locked_pool_action.locked_start_time.clone();
+        
+        for n in 0..=locked_amounts.len() {
+            if locked_start_times[n] + 1296000 < current_time {
+                withdraw_pool_action.requested_amount += locked_amounts[n];
+                
+                locked_pool_action.locked_amount[n] = locked_pool_action.locked_amount[locked_amounts.len()];
+                locked_pool_action.locked_amount.pop();
+
+                locked_pool_action.locked_start_time[n] = locked_pool_action.locked_start_time[locked_amounts.len()];;
+                locked_pool_action.locked_start_time.pop();
+
+            }
+        }
+
+        //Check Unlocked Amount i.e. exceeded 15 days
+        require!(withdraw_pool_action.requested_amount >= action_amount, ErrorCode::LockingPeriod);
+        
+        // Update Pool Action
+        require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
         pool_action.token_amount -= action_amount;
 
-         let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
-         let staking_pool_signer_seeds: &[&[_]] = &[
+        //Update Withdraw Pool Time
+        withdraw_pool_action.requested_time = current_time;
+        
+        //Update Staking Pool
+        staking_pool.token_amount -= action_amount;
+        
+       }
+
+        // Update Action Pool 
+        if pool_action.start_time == 0{
+            pool_action.start_time = current_time; //Set the start time for the first time 
+            pool_action.update_time = current_time; //Set the update time to current time
+        
+        }
+        else{
+            pool_action.update_time = current_time; //Set the update time to current time
+        }
+
+        // Update Pool Entry
+        pool_action_entry.stake_action = stake_action;
+        pool_action_entry.staker = current_user.key();
+        pool_action_entry.token_amount = action_amount;
+        pool_action_entry.time_stamp = current_time;
+
+        
+        pool_count.count = count;
+
+       Ok(())
+    }
+    }
+
+    pub fn claim_withdrawls(
+        ctx: Context<PerformWithdraw>,
+        claim_amount: u64
+    ) -> Result<()>{
+            let clock = Clock::get()?;
+            let current_time = clock.unix_timestamp;
+
+            let withdraw_pool_action = &mut ctx.accounts.withdraw_pool_action;
+
+            let token_mint_key = ctx.accounts.token_mint.clone().key();
+            let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
+
+            let day_of_week = (current_time/86400 + 4)%7;
+            require!(day_of_week == 1, ErrorCode::InvalidWithdrawDay);
+
+            //Transfer Funds
+            let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
+            let staking_pool_signer_seeds: &[&[_]] = &[
+                b"stake_pool".as_ref(),
+                &token_mint_key.as_ref(),
+                &bump_seed_staking_pool
+            ];
+
+            let transfer_instruction = Transfer{
+                from: ctx.accounts.staking_vault_associated_address.to_account_info(),
+                to: ctx.accounts.staker_associated_address.to_account_info(),
+                authority: current_staking_pool_account.clone(),
+            };
+
+            let signer = &[staking_pool_signer_seeds];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                transfer_instruction,
+                signer,
+            );
+            anchor_spl::token::transfer(cpi_ctx, claim_amount)?;
+            
+            withdraw_pool_action.requested_amount -= claim_amount;
+            Ok(())
+    }
+
+    pub fn update_admin_wallet(
+        ctx: Context<UpdateConfig>,
+        new_admin: Pubkey
+    ) -> Result<()> {
+        let current_admin = ctx.accounts.admin_config.admin;
+        if current_admin == Pubkey::new(&[0; 32]) || ctx.accounts.owner.key() == current_admin{
+            let updated_config = &mut ctx.accounts.admin_config;
+            updated_config.admin = new_admin;   
+        }
+        else{
+           return err!(ErrorCode::InvalidAdmin);
+        }
+
+        Ok(())
+    }
+    
+    //Rescue any token by the owner
+    pub fn rescuse_token(
+        ctx: Context<WihdrawToken>,
+        withdraw_amount: u64
+    ) -> Result<()>{
+        let token_mint_key = ctx.accounts.token_mint.clone().key();
+        let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
+
+         //Transfer Funds
+        let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
+        let staking_pool_signer_seeds: &[&[_]] = &[
             b"stake_pool".as_ref(),
             &token_mint_key.as_ref(),
             &bump_seed_staking_pool
@@ -69,32 +203,20 @@ pub mod staking_contract {
 
         let transfer_instruction = Transfer{
             from: ctx.accounts.staking_vault_associated_address.to_account_info(),
-            to: ctx.accounts.staker_associated_address.to_account_info(),
+            to: ctx.accounts.admin_associated_address.to_account_info(),
             authority: current_staking_pool_account.clone(),
         };
+
         let signer = &[staking_pool_signer_seeds];
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             transfer_instruction,
             signer,
-            );
-        anchor_spl::token::transfer(cpi_ctx, action_amount)?;
-
-        staking_pool.token_amount -= action_amount;
-        
-       }
-
-        pool_action_entry.stake_action = stake_action;
-        pool_action_entry.staker = current_user.key();
-        pool_action_entry.token_amount = action_amount;
-        pool_action_entry.time_stamp =Clock::get()?.unix_timestamp;
-
-        pool_count.count = count;
-
-       Ok(())
+        );
+        anchor_spl::token::transfer(cpi_ctx, withdraw_amount)?;
+            
+        Ok(())
     }
-}
-
 #[derive(Accounts)]
 #[instruction(action_amount: u64, action_token: Pubkey, stake_action: bool, count: u8)]
 pub struct PerformAction<'info> {
@@ -116,15 +238,42 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker, 
-        space = 8 + 32 + 8 + 8 + 1,
+        space = 8 + 8 + 8 + 8,
         seeds = [
             b"pool_action".as_ref(),
-            staker.key().as_ref()
+            staker.key().as_ref(),
+            token_mint.key().as_ref()
         ],
         bump
     )]
     pool_action: Account<'info, PoolAction>,
 
+    #[account(
+        init_if_needed,
+        payer = staker, 
+        space = 8 + 8*30, //15Each
+        seeds = [
+            b"lock_pool_action".as_ref(),
+            staker.key().as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    lock_pool_action: Account<'info, LockedPool>,
+
+    
+    #[account(
+        init_if_needed,
+        payer = staker, 
+        space = 8 + 8 + 8,
+        seeds = [
+            b"withdraw_pool_action".as_ref(),
+            staker.key().as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    withdraw_pool_action: Account<'info, WithdrawRequest>,
 
     #[account(
         init_if_needed,
@@ -133,6 +282,7 @@ pub struct PerformAction<'info> {
         seeds = [
             b"pool_entry".as_ref(),
             staker.key().as_ref(),
+            token_mint.key().as_ref(),
             &[count]
         ],
         bump
@@ -145,7 +295,8 @@ pub struct PerformAction<'info> {
         space = 8 + 4,
         seeds = [
             b"pool_count".as_ref(),
-            staker.key().as_ref()
+            staker.key().as_ref(),
+            token_mint.key().as_ref()
         ],
         bump
     )]
@@ -174,6 +325,142 @@ pub struct PerformAction<'info> {
     rent: Sysvar<'info, Rent>
 }
 
+#[derive(Accounts)]
+#[instruction(claim_amount: u64)]
+pub struct PerformWithdraw<'info>{
+    #[account(mut)]
+    staker: Signer<'info>, 
+
+    #[account(
+        init_if_needed,
+        payer = staker,
+        space = 8 + 32 + 8,
+        seeds = [
+            b"stake_pool".as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    current_staking_pool: Account<'info, StakePool>,
+
+    #[account(
+        init_if_needed,
+        payer = staker, 
+        space = 8 + 8 + 8,
+        seeds = [
+            b"withdraw_pool_action".as_ref(),
+            staker.key().as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    withdraw_pool_action: Account<'info, WithdrawRequest>,
+
+    #[account(
+        init_if_needed,
+        payer = staker,
+        associated_token::mint = token_mint,
+        associated_token::authority = current_staking_pool,
+    )]
+    staking_vault_associated_address: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+         mut,
+        constraint= staker_associated_address.owner == staker.key(),
+        constraint= staker_associated_address.mint == token_mint.key(),
+    )]
+    staker_associated_address: Box<Account<'info, TokenAccount>>,
+
+    token_mint: Account<'info, Mint>,
+    associated_token_program: Program<'info, AssociatedToken>,
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>
+}
+#[derive(Accounts)]
+pub struct UpdateConfig<'info>{
+    
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init_if_needed,
+        owner = program_id.clone(),
+        payer = owner,
+        seeds= [
+            b"admin_config".as_ref(),
+        ],
+        bump,
+        space = 8 + 32
+    )]
+    pub admin_config: Account<'info, Config>,
+    
+    // Application level accounts 
+    system_program: Program<'info, System>,
+    rent: Sysvar<'info, Rent>,
+
+}
+
+#[derive(Accounts)]
+#[instruction(withdraw_amount: u64)]
+pub struct WihdrawToken<'info>{
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + 32 + 8,
+        seeds = [
+            b"stake_pool".as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    current_staking_pool: Account<'info, StakePool>,
+
+    #[account(
+        init_if_needed,
+        owner = program_id.clone(),
+        payer = owner,
+        seeds= [
+            b"admin_config".as_ref(),
+        ],
+        bump,
+        space = 8 + 32
+    )]
+    pub admin_config: Account<'info, Config>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        associated_token::mint = token_mint,
+        associated_token::authority = current_staking_pool,
+    )]
+    staking_vault_associated_address: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint= admin_associated_address.owner == owner.key(),
+        constraint= admin_associated_address.mint == token_mint.key(),
+    )]
+    admin_associated_address: Box<Account<'info, TokenAccount>>,
+
+    token_mint: Account<'info, Mint>,
+
+    associated_token_program: Program<'info, AssociatedToken>,
+    
+    // Application level accounts 
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[account]
+#[derive(Default)]
+pub struct Config{
+    pub admin: Pubkey,
+}
 #[account]
 #[derive(Default)]
 pub struct StakePool {
@@ -184,9 +471,16 @@ pub struct StakePool {
 #[account]
 #[derive(Default)]
 pub struct PoolAction{
-    staker: Pubkey,
     token_amount: u64,
-    start_time: u64,
+    start_time: i64,
+    update_time: i64,
+}
+
+#[account]
+#[derive(Default)]
+pub struct LockedPool{
+    locked_amount: Vec<u64>,
+    locked_start_time: Vec<i64>
 }
 
 #[account]
@@ -196,6 +490,13 @@ pub struct PoolActionEntry{
     token_amount: u64,
     stake_action: bool,
     time_stamp: i64
+}
+
+#[account]
+#[derive(Default)]
+pub struct WithdrawRequest{
+    requested_amount: u64,
+    requested_time: i64,
 }
 
 #[account]
@@ -218,4 +519,14 @@ pub enum ErrorCode {
 
     #[msg("Not Valid Pool Action Acccount Provided")]
     InvalidPoolAction, 
+
+    #[msg("Inside Lock Peroid")]
+    LockingPeriod,
+
+    #[msg("Cannot request for withdraws on sunday")]
+    InvalidWithdrawDay,
+
+        
+    #[msg("Invalid Admin")]
+    InvalidAdmin,
 }

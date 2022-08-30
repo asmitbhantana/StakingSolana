@@ -1,0 +1,6 @@
+Changes:
+1. Add the option to Deposit USDT On Solana Blockchain (Done)
+2. Add the function to freeze the withdrawal function for the 15 days. 
+4. People will be able to claim it on Sundays. 
+5. Withdrawl Request from Monday to Fridays. 
+
