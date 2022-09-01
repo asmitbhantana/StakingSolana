@@ -8,6 +8,8 @@ import { assert, expect } from "chai";
 interface PDAParameters {
   stake_pool: anchor.web3.PublicKey;
   pool_action: anchor.web3.PublicKey;
+  lock_pool: anchor.web3.PublicKey;
+  withdraw_pool: anchor.web3.PublicKey;
 }
 interface EntriesPDA {
   entries_pda: [anchor.web3.PublicKey];
@@ -20,7 +22,7 @@ interface EntriesData {
   time;
 }
 
-describe("Stake", () => {
+describe("Test Stake Unstake etc", () => {
   const provider = anchor.AnchorProvider.local();
   anchor.setProvider(provider);
 
@@ -50,20 +52,48 @@ describe("Stake", () => {
 
     let [pool_action, pool_action_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("pool_action"), signer.toBuffer()],
+        [
+          Buffer.from("pool_action"),
+          signer.toBuffer(),
+          token_program.toBuffer(),
+        ],
         program.programId
       );
+
+    let [lock_pool_action, lock_pool_action_bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("lock_pool_action"),
+          signer.toBuffer(),
+          token_program.toBuffer(),
+        ],
+        program.programId
+      );
+
+    let [withdraw_pool_action, withdraw_pool_action_bump] =
+      await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("withdraw_pool_action"),
+          signer.toBuffer(),
+          token_program.toBuffer(),
+        ],
+        program.programId
+      );
+
     return {
       stake_pool: stake_pool,
       pool_action: pool_action,
+      lock_pool: lock_pool_action,
+      withdraw_pool: withdraw_pool_action,
     };
   };
 
   //get PDAs of Staking Entry
   const getPdaStakingEntries = async (
-    signer: anchor.web3.PublicKey
+    signer: anchor.web3.PublicKey,
+    token_mint: anchor.web3.PublicKey
   ): Promise<EntriesPDA> => {
-    let s_last_count = await getLastEntryCount(signer);
+    let s_last_count = await getLastEntryCount(signer, token_mint);
     let last_count = parseInt(s_last_count);
 
     let keys = [];
@@ -74,6 +104,7 @@ describe("Stake", () => {
           [
             Buffer.from("pool_entry"),
             signer.toBuffer(),
+            token_mint.toBuffer(),
             new anchor.BN(last_count).toArrayLike(Buffer),
           ],
           program.programId
@@ -90,11 +121,12 @@ describe("Stake", () => {
 
   //get last entry of the user
   const getLastEntryCount = async (
-    signer: anchor.web3.PublicKey
+    signer: anchor.web3.PublicKey,
+    token_mint: anchor.web3.PublicKey
   ): Promise<string> => {
     let [pool_count, pool_count_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("pool_count"), signer.toBuffer()],
+        [Buffer.from("pool_count"), signer.toBuffer(), token_mint.toBuffer()],
         program.programId
       );
 
@@ -123,15 +155,17 @@ describe("Stake", () => {
 
   //Get PDA For storing the Entry
   const getLatestEntryPDA = async (
-    signer: anchor.web3.PublicKey
+    signer: anchor.web3.PublicKey,
+    token_mint: anchor.web3.PublicKey
   ): Promise<anchor.web3.PublicKey> => {
-    let last_count = await getLastEntryCount(signer);
+    let last_count = await getLastEntryCount(signer, token_mint);
     let next_count = (parseInt(last_count) + 1).toString();
     let [last_entry_pda, pda_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
           Buffer.from("pool_entry"),
           signer.toBuffer(),
+          token_mint.toBuffer(),
           new anchor.BN(next_count).toArrayLike(Buffer),
         ],
         program.programId
@@ -288,22 +322,16 @@ describe("Stake", () => {
 
   it("Staking", async () => {
     let staking_amount = "20000000";
-    let staking_token = mintAddress;
     let stake_action = true; //Deposite
 
-    console.log("here");
-
-    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey);
-    let pool_count_pda = await getEntryCountPDA(alice.publicKey, staking_token);
-    let latest_count = await getLastEntryCount(alice.publicKey);
-
-    console.log("pool_entry_pda", pool_entry_pda);
-    console.log("pool_count_pda", pool_count_pda);
+    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
+    let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
 
     let next_count = parseInt(latest_count) + 1;
     let txn = await program.rpc.performAction(
       new anchor.BN(staking_amount),
-      staking_token,
+      mintAddress,
       stake_action,
       new anchor.BN(next_count),
       {
@@ -312,6 +340,8 @@ describe("Stake", () => {
           tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           poolAction: pda.pool_action,
+          lockPoolAction: pda.lock_pool,
+          withdrawPoolAction: pda.withdraw_pool,
           poolEntry: pool_entry_pda,
           poolCount: pool_count_pda,
           stakerAssociatedAddress: aliceTokenAccount,
@@ -331,20 +361,19 @@ describe("Stake", () => {
     assert.equal(stakingVaultBalance, staking_amount);
   });
 
-  it("Unstaking", async () => {
-    let un_staking_amount = "5000000";
-    let staking_token = mintAddress;
+  it("Withdraw Request", async () => {
+    let un_staking_amount = "500000";
     let stake_action = false;
 
-    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey);
-    let pool_count_pda = await getEntryCountPDA(alice.publicKey, staking_token);
-    let latest_count = await getLastEntryCount(alice.publicKey);
+    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
+    let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
 
     let next_count = parseInt(latest_count) + 1;
 
     let txn = await program.rpc.performAction(
       new anchor.BN(un_staking_amount),
-      staking_token,
+      mintAddress,
       stake_action,
       next_count,
       {
@@ -354,7 +383,44 @@ describe("Stake", () => {
           currentStakingPool: pda.stake_pool,
           poolAction: pda.pool_action,
           poolEntry: pool_entry_pda,
+          lockPoolAction: pda.lock_pool,
+          withdrawPoolAction: pda.withdraw_pool,
           poolCount: pool_count_pda,
+          stakerAssociatedAddress: aliceTokenAccount,
+          stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+          associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        signers: [alice],
+      }
+    );
+    let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
+    assert.equal(stakingVaultBalance, "20000000");
+
+    let aliceBalance = await readAccount(aliceTokenAccount);
+    assert.equal(aliceBalance, "0");
+  });
+
+  it("Withdraw Token On Sunday", async () => {
+    let un_staking_amount = "5000000";
+    let stake_action = false;
+
+    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
+    let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
+
+    let next_count = parseInt(latest_count) + 1;
+
+    let txn = await program.rpc.claimWithdraw(
+      new anchor.BN(un_staking_amount),
+      {
+        accounts: {
+          staker: alice.publicKey,
+          tokenMint: mintAddress,
+          currentStakingPool: pda.stake_pool,
+          withdrawPoolAction: pda.withdraw_pool,
           stakerAssociatedAddress: aliceTokenAccount,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -372,15 +438,14 @@ describe("Stake", () => {
     assert.equal(aliceBalance, un_staking_amount);
   });
 
-  it("Get Entry Data", async () => {
-    let entires = await getPdaStakingEntries(alice.publicKey);
-
-    console.log("Entires PDA", Array.from(entires.entries_pda));
+  it("Get Deposit/Withdraw Entry Data", async () => {
+    let entires = await getPdaStakingEntries(alice.publicKey, mintAddress);
 
     await entires.entries_pda.forEach(async (element, i) => {
       let string_pub_key = element.toString();
       let pub_key = new anchor.web3.PublicKey(string_pub_key);
       let data_from_pda = await getEntryData(pub_key);
+      console.log("===>", i);
       console.log("Entry Count", i);
       console.log("Data Action", data_from_pda.action);
       console.log("Data Amount", data_from_pda.amount.toString());

@@ -69,7 +69,7 @@ pub mod staking_contract {
 
         //Handle Withdraw Request
         // Queue their withdraw to next sunday
-        // Withdraw request can only be made from monday to friday 
+        // Withdraw request can only be made from Monday to Friday 
         let day_of_week = (current_time/86400 + 4)%7;
         require!(day_of_week != 1, ErrorCode::InvalidWithdrawDay);
 
@@ -77,22 +77,28 @@ pub mod staking_contract {
         let locked_amounts =  locked_pool_action.locked_amount.clone();
         let locked_start_times =  locked_pool_action.locked_start_time.clone();
         
-        for n in 0..=locked_amounts.len() {
-            if locked_start_times[n] + 1296000 < current_time {
-                withdraw_pool_action.requested_amount += locked_amounts[n];
+        let total_length = locked_amounts.len();
+
+        for n in 0..total_length {
+            ////TODO::Uncomment on production
+            // if locked_start_times[n] + 1296000 < current_time {
+                withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n];
                 
-                locked_pool_action.locked_amount[n] = locked_pool_action.locked_amount[locked_amounts.len()];
-                locked_pool_action.locked_amount.pop();
+                if locked_pool_action.locked_amount.len() > 1{
+                    
+                    locked_pool_action.locked_amount[n] = locked_pool_action.locked_amount[locked_pool_action.locked_amount.len()];
+                    locked_pool_action.locked_start_time[n] = locked_pool_action.locked_start_time[locked_pool_action.locked_start_time.len()];
+                    
+                    locked_pool_action.locked_amount.pop();
+                    locked_pool_action.locked_start_time.pop();
+                }
 
-                locked_pool_action.locked_start_time[n] = locked_pool_action.locked_start_time[locked_amounts.len()];;
-                locked_pool_action.locked_start_time.pop();
-
-            }
+            // }
         }
-
-        //Check Unlocked Amount i.e. exceeded 15 days
+        //Check Unlocked Amount i.e. exceeded 15 days Locking
         require!(withdraw_pool_action.requested_amount >= action_amount, ErrorCode::LockingPeriod);
-        
+
+       
         // Update Pool Action
         require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
         pool_action.token_amount -= action_amount;
@@ -126,9 +132,9 @@ pub mod staking_contract {
 
        Ok(())
     }
-    }
+   
 
-    pub fn claim_withdrawls(
+    pub fn claim_withdraw(
         ctx: Context<PerformWithdraw>,
         claim_amount: u64
     ) -> Result<()>{
@@ -141,7 +147,8 @@ pub mod staking_contract {
             let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
 
             let day_of_week = (current_time/86400 + 4)%7;
-            require!(day_of_week == 1, ErrorCode::InvalidWithdrawDay);
+            //TODO::Uncomment on production
+            // require!(day_of_week == 1, ErrorCode::InvalidWithdrawDay);
 
             //Transfer Funds
             let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
@@ -187,7 +194,7 @@ pub mod staking_contract {
     
     //Rescue any token by the owner
     pub fn rescuse_token(
-        ctx: Context<WihdrawToken>,
+        ctx: Context<WithdrawToken>,
         withdraw_amount: u64
     ) -> Result<()>{
         let token_mint_key = ctx.accounts.token_mint.clone().key();
@@ -217,6 +224,7 @@ pub mod staking_contract {
             
         Ok(())
     }
+ }
 #[derive(Accounts)]
 #[instruction(action_amount: u64, action_token: Pubkey, stake_action: bool, count: u8)]
 pub struct PerformAction<'info> {
@@ -403,7 +411,7 @@ pub struct UpdateConfig<'info>{
 
 #[derive(Accounts)]
 #[instruction(withdraw_amount: u64)]
-pub struct WihdrawToken<'info>{
+pub struct WithdrawToken<'info>{
     #[account(mut)]
     pub owner: Signer<'info>,
 
@@ -459,8 +467,9 @@ pub struct WihdrawToken<'info>{
 #[account]
 #[derive(Default)]
 pub struct Config{
-    pub admin: Pubkey,
+    admin: Pubkey
 }
+
 #[account]
 #[derive(Default)]
 pub struct StakePool {
@@ -517,16 +526,15 @@ pub enum ErrorCode {
     #[msg("Not Valid User")]
     InvalidUser, 
 
-    #[msg("Not Valid Pool Action Acccount Provided")]
+    #[msg("Not Valid Pool Action Account Provided")]
     InvalidPoolAction, 
 
-    #[msg("Inside Lock Peroid")]
+    #[msg("Insufficient Amount for Withdraw! Wait for 15days unlocking Period!")]
     LockingPeriod,
 
-    #[msg("Cannot request for withdraws on sunday")]
+    #[msg("Cannot request other than on Sunday")]
     InvalidWithdrawDay,
 
-        
     #[msg("Invalid Admin")]
     InvalidAdmin,
 }
