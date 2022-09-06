@@ -24,6 +24,7 @@ pub mod staking_contract {
        let clock = Clock::get()?;
        let current_time = clock.unix_timestamp;
 
+       let current_interest = ctx.accounts.token_interest.interest.clone() as u64;
        let current_user = ctx.accounts.staker.clone();
        let token_program = ctx.accounts.token_mint.clone();
               
@@ -84,8 +85,10 @@ pub mod staking_contract {
 
         for n in 0..total_length {
             ////TODO::Uncomment on production
+            // if withdraw_pool_action.requested_amount < action_amount {
             // if locked_start_times[n] + 1296000 < current_time {
-                withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n];
+                let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 31536000) as u64;
+                withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
                 
                 if locked_pool_action.locked_amount.len() > 1{
                     
@@ -96,6 +99,10 @@ pub mod staking_contract {
                     locked_pool_action.locked_start_time.pop();
                 }
 
+            // }
+            // }
+            // else{
+            //     break;
             // }
         }
         //Check Unlocked Amount i.e. exceeded 15 days Locking
@@ -212,6 +219,18 @@ pub mod staking_contract {
         else{
            return err!(ErrorCode::InvalidAdmin);
         }
+
+        Ok(())
+    }
+
+    pub fn update_interest_rate(
+        ctx: Context<UpdateInterest>, 
+        new_interest: u64
+    ) -> Result<()> {
+        require!(ctx.accounts.admin.key() == ctx.accounts.admin_config.admin.key(), ErrorCode::InvalidAdmin);
+        
+        let interest_rate = &mut ctx.accounts.token_interest;
+        interest_rate.interest = new_interest;
 
         Ok(())
     }
@@ -335,6 +354,18 @@ pub struct PerformAction<'info> {
     pool_count: Account<'info, Count>,
 
     #[account(
+        init_if_needed, 
+        payer = staker, 
+        space = 8 + 4, 
+        seeds = [
+            b"token_interest".as_ref(), 
+            token_mint.key().as_ref()
+        ], 
+        bump
+    )]
+    token_interest: Account<'info, InterestRate>, 
+
+    #[account(
         init_if_needed,
         payer = staker,
         associated_token::mint = token_mint,
@@ -355,6 +386,42 @@ pub struct PerformAction<'info> {
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
     rent: Sysvar<'info, Rent>
+}
+
+#[derive(Accounts)]
+pub struct UpdateInterest<'info> {
+    #[account(mut)]
+    admin: Signer<'info>,
+
+    #[account(
+        init_if_needed, 
+        payer = admin, 
+        space = 8 + 4, 
+        seeds = [
+            b"token_interest".as_ref(), 
+            token_mint.key().as_ref()
+        ], 
+        bump
+    )]
+    token_interest: Account<'info, InterestRate>, 
+
+
+    #[account(
+        mut,
+        owner = program_id.clone(),
+        seeds= [
+            b"admin_config".as_ref(),
+        ],
+        bump,
+    )]
+    admin_config: Account<'info, Config>,
+
+    token_mint: Account<'info, Mint>,
+    associated_token_program: Program<'info, AssociatedToken>,
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>
+
 }
 
 #[derive(Accounts)]
@@ -595,4 +662,6 @@ pub enum ErrorCode {
 
     #[msg("Invalid Admin")]
     InvalidAdmin,
+
+
 }
