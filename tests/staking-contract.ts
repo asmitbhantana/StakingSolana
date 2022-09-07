@@ -199,6 +199,7 @@ describe("Test Stake Unstake etc", () => {
       amount: entry.tokenAmount,
       action: entry.stakeAction,
       time: entry.timeStamp,
+      confirmed: entry.confirmed
     };
   };
 
@@ -561,6 +562,7 @@ describe("Test Stake Unstake etc", () => {
       console.log("Data Amount", data_from_pda.amount.toString());
       console.log("Data User", data_from_pda.staker.toString());
       console.log("Data Timestamp", data_from_pda.time.toString());
+      console.log("Data Confirmed ", data_from_pda.confirmed.toString());
     });
   });
 });

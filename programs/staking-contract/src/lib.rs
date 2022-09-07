@@ -329,7 +329,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker,
-        space = 8 + 32 + 8 + 1 + 8,
+        space = 8 + 32 + 8 + 1 + 8 + 1,
         seeds = [
             b"pool_entry".as_ref(),
             staker.key().as_ref(),
@@ -356,7 +356,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed, 
         payer = staker, 
-        space = 8 + 4, 
+        space = 8 + 8, 
         seeds = [
             b"token_interest".as_ref(), 
             token_mint.key().as_ref()
@@ -396,7 +396,7 @@ pub struct UpdateInterest<'info> {
     #[account(
         init_if_needed, 
         payer = admin, 
-        space = 8 + 4, 
+        space = 8 + 8, 
         seeds = [
             b"token_interest".as_ref(), 
             token_mint.key().as_ref()
@@ -458,7 +458,7 @@ pub struct PerformWithdraw<'info>{
     #[account(
         init_if_needed,
         payer = staker,
-        space = 8 + 32 + 8 + 1 + 8,
+        space = 8 + 32 + 8 + 1 + 8 + 1,
         seeds = [
             b"pool_entry".as_ref(),
             staker.key().as_ref(),
