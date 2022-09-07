@@ -31,13 +31,28 @@ describe("Test Stake Unstake etc", () => {
   let mintAddress: anchor.web3.PublicKey;
 
   let alice: anchor.web3.Keypair;
-  // let bob: anchor.web3.Keypair;
+  let bobAdmin: anchor.web3.Keypair;
   let aliceTokenAccount: anchor.web3.PublicKey;
-  // let bobTokenAccount: anchor.web3.PublicKey;
+  let bobAdminTokenAccount: anchor.web3.PublicKey;
+
+  let adminConfig: anchor.web3.PublicKey;
 
   let pda: PDAParameters;
 
   let stakingVaultAssociatedAddress: anchor.web3.PublicKey;
+
+  const fundWallet = async (user: anchor.web3.PublicKey, amount: number) => {
+    let txFund = new anchor.web3.Transaction();
+    txFund.add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: provider.wallet.publicKey,
+        toPubkey: user,
+        lamports: amount * anchor.web3.LAMPORTS_PER_SOL,
+      })
+    );
+    const sigTxFund = await provider.sendAndConfirm(txFund);
+   
+  };
 
   //get PDA of Stake Pool
   const getPdaParams = async (
@@ -280,6 +295,28 @@ describe("Test Stake Unstake etc", () => {
     return [user, userAssociatedTokenAccount];
   };
 
+  const getAdminPDA = async(): Promise<anchor.web3.PublicKey> => {
+    const adminConfig =  await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("admin_config"),
+        ],
+        program.programId
+      );
+      return adminConfig[0];
+  }
+
+  const getTokenInterestPDA = async(token_mint: anchor.web3.PublicKey):Promise<anchor.web3.PublicKey> => {
+    const tokenInterest = await anchor.web3.PublicKey.findProgramAddress(
+      [
+        Buffer.from("token_interest"),
+        token_mint.toBuffer()
+      ],
+      program.programId
+    );
+    
+    return tokenInterest[0];
+  }
+
   const readAccount = async (
     accountPublicKey: anchor.web3.PublicKey
   ): Promise<[string]> => {
@@ -300,10 +337,11 @@ describe("Test Stake Unstake etc", () => {
       20000000
     );
 
-    // [bob, bobTokenAccount] = await createUserAndAssociatedWallet(
-    //   mintAddress,
-    //   20000000
-    // );
+    [bobAdmin, bobAdminTokenAccount] = await createUserAndAssociatedWallet(
+      mintAddress,
+      0
+    );
+
 
     // PDA for alice
     pda = await getPdaParams(mintAddress, alice.publicKey);
@@ -320,6 +358,67 @@ describe("Test Stake Unstake etc", () => {
     );
   });
 
+ it("Update Admin on Config", async () => {
+    adminConfig = await getAdminPDA();
+
+    let tempAdmin = new anchor.web3.Keypair();
+    await fundWallet(tempAdmin.publicKey, 2);
+
+    await program.rpc.updateAdminWallet(tempAdmin.publicKey, {
+      accounts: {
+        owner: tempAdmin.publicKey,
+        adminConfig: adminConfig,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      },
+      signers: [tempAdmin],
+    });
+
+    let info = await program.account.config.fetch(adminConfig);
+    assert.equal(info.admin.toString(), tempAdmin.publicKey.toString());
+
+    await program.rpc.updateAdminWallet(bobAdmin.publicKey, {
+      accounts: {
+        owner: tempAdmin.publicKey,
+        adminConfig: adminConfig,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      },
+      signers: [tempAdmin],
+    });
+
+    info = await program.account.config.fetch(adminConfig);
+    assert.equal(info.admin.toString(), bobAdmin.publicKey.toString());
+  });
+
+  it("Update Interest Rate", async() => {
+    // Update Interest Rate
+    let tokenInterestPda = await getTokenInterestPDA(mintAddress);
+
+    let interestRate = 2;
+
+    let txn = await program.rpc.updateInterestRate(
+      interestRate, 
+      {
+        accounts: {
+          admin: bobAdmin.publicKey,
+          tokenInterest: tokenInterestPda,
+          adminConfig: adminConfig,
+          tokenMint: mintAddress,
+          associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        signers: [bobAdmin],
+      }
+    );
+
+    let tokenInterest = await program.account.interestRate.fetch(tokenInterestPda);
+    assert.equal(tokenInterest.interest.toString(), "2");
+
+  });
+
   it("Staking", async () => {
     let staking_amount = "20000000";
     let stake_action = true; //Deposite
@@ -327,6 +426,8 @@ describe("Test Stake Unstake etc", () => {
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
     let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
     let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
+    let tokenInterestPda = await getTokenInterestPDA(mintAddress);
+
 
     let next_count = parseInt(latest_count) + 1;
     let txn = await program.rpc.performAction(
@@ -337,18 +438,19 @@ describe("Test Stake Unstake etc", () => {
       {
         accounts: {
           staker: alice.publicKey,
-          tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           poolAction: pda.pool_action,
           lockPoolAction: pda.lock_pool,
           withdrawPoolAction: pda.withdraw_pool,
           poolEntry: pool_entry_pda,
           poolCount: pool_count_pda,
-          stakerAssociatedAddress: aliceTokenAccount,
+          tokenInterest: tokenInterestPda,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+          stakerAssociatedAddress: aliceTokenAccount,
+          tokenMint: mintAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
-          tokenProgram: spl.TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
         signers: [alice],
@@ -368,6 +470,7 @@ describe("Test Stake Unstake etc", () => {
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
     let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
     let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
+    let tokenInterestPda = await getTokenInterestPDA(mintAddress);
 
     let next_count = parseInt(latest_count) + 1;
 
@@ -379,18 +482,19 @@ describe("Test Stake Unstake etc", () => {
       {
         accounts: {
           staker: alice.publicKey,
-          tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           poolAction: pda.pool_action,
-          poolEntry: pool_entry_pda,
           lockPoolAction: pda.lock_pool,
           withdrawPoolAction: pda.withdraw_pool,
+          poolEntry: pool_entry_pda,
           poolCount: pool_count_pda,
-          stakerAssociatedAddress: aliceTokenAccount,
+          tokenInterest: tokenInterestPda,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+          stakerAssociatedAddress: aliceTokenAccount,
+          tokenMint: mintAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
-          tokenProgram: spl.TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         },
         signers: [alice],
@@ -410,17 +514,21 @@ describe("Test Stake Unstake etc", () => {
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
     let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
     let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
+    let tokenInterestPda = await getTokenInterestPDA(mintAddress);
 
     let next_count = parseInt(latest_count) + 1;
 
     let txn = await program.rpc.claimWithdraw(
       new anchor.BN(un_staking_amount),
+      next_count,
       {
         accounts: {
           staker: alice.publicKey,
           tokenMint: mintAddress,
           currentStakingPool: pda.stake_pool,
           withdrawPoolAction: pda.withdraw_pool,
+          poolEntry: pool_entry_pda,
+          poolCount: pool_count_pda,
           stakerAssociatedAddress: aliceTokenAccount,
           stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
           associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -437,6 +545,8 @@ describe("Test Stake Unstake etc", () => {
     let aliceBalance = await readAccount(aliceTokenAccount);
     assert.equal(aliceBalance, un_staking_amount);
   });
+
+
 
   it("Get Deposit/Withdraw Entry Data", async () => {
     let entires = await getPdaStakingEntries(alice.publicKey, mintAddress);

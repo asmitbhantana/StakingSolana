@@ -225,7 +225,7 @@ pub mod staking_contract {
 
     pub fn update_interest_rate(
         ctx: Context<UpdateInterest>, 
-        new_interest: u64
+        new_interest: u8
     ) -> Result<()> {
         require!(ctx.accounts.admin.key() == ctx.accounts.admin_config.admin.key(), ErrorCode::InvalidAdmin);
         
@@ -302,7 +302,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker, 
-        space = 8 + 8*30, //15Each
+        space = 8 + 4 + 32, //8*2*2
         seeds = [
             b"lock_pool_action".as_ref(),
             staker.key().as_ref(),
@@ -630,7 +630,7 @@ pub struct WithdrawRequest{
 #[account]
 #[derive(Default)]
 pub struct InterestRate{
-    interest: u64,
+    interest: u8,
 }
 
 #[account]
