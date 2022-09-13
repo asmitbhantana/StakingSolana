@@ -264,6 +264,33 @@ pub mod staking_contract {
         Ok(())
     }
 
+   
+
+    
+    //Deposit any token by the owner
+    pub fn deposit_token(
+        ctx: Context<DepositToken>,
+        deposit_amount: u64
+    ) -> Result<()>{
+       let staking_pool = &mut ctx.accounts.current_staking_pool;
+
+        //Transfer Funds
+        let transfer_instruction = Transfer{
+            from: ctx.accounts.admin_associated_address.to_account_info(),
+            to: ctx.accounts.staking_vault_associated_address.to_account_info(),
+            authority: ctx.accounts.owner.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+        );
+        anchor_spl::token::transfer(cpi_ctx, deposit_amount)?;
+
+        staking_pool.token_amount += deposit_amount;
+
+        Ok(())
+    }
+
 
  }
 #[derive(Accounts)]
@@ -528,6 +555,61 @@ pub struct UpdateConfig<'info>{
 #[derive(Accounts)]
 #[instruction(withdraw_amount: u64)]
 pub struct WithdrawToken<'info>{
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + 32 + 8,
+        seeds = [
+            b"stake_pool".as_ref(),
+            token_mint.key().as_ref()
+        ],
+        bump
+    )]
+    current_staking_pool: Account<'info, StakePool>,
+
+    #[account(
+        init_if_needed,
+        owner = program_id.clone(),
+        payer = owner,
+        seeds= [
+            b"admin_config".as_ref(),
+        ],
+        bump,
+        space = 8 + 32
+    )]
+    pub admin_config: Account<'info, Config>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        associated_token::mint = token_mint,
+        associated_token::authority = current_staking_pool,
+    )]
+    staking_vault_associated_address: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint= admin_associated_address.owner == owner.key(),
+        constraint= admin_associated_address.mint == token_mint.key(),
+    )]
+    admin_associated_address: Box<Account<'info, TokenAccount>>,
+
+    token_mint: Account<'info, Mint>,
+
+    associated_token_program: Program<'info, AssociatedToken>,
+    
+    // Application level accounts 
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(withdraw_amount: u64)]
+pub struct DepositToken<'info>{
     #[account(mut)]
     pub owner: Signer<'info>,
 
