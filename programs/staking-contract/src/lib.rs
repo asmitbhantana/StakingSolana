@@ -302,7 +302,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker, 
-        space = 8 + 4 + 32, //8*2*2
+        space = 8 + 4 + 160, //8*2*10
         seeds = [
             b"lock_pool_action".as_ref(),
             staker.key().as_ref(),
