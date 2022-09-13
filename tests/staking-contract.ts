@@ -1,9 +1,9 @@
-import * as anchor from "@project-serum/anchor";
-import { Program } from "@project-serum/anchor";
-import { StakingContract } from "../target/types/staking_contract";
+import * as anchor from '@project-serum/anchor';
+import { Program } from '@project-serum/anchor';
+import { StakingContract } from '../target/types/staking_contract';
 
-import * as spl from "@solana/spl-token";
-import { assert, expect } from "chai";
+import * as spl from '@solana/spl-token';
+import { assert, expect } from 'chai';
 
 interface PDAParameters {
   stake_pool: anchor.web3.PublicKey;
@@ -22,7 +22,7 @@ interface EntriesData {
   time;
 }
 
-describe("Test Stake Unstake etc", () => {
+describe('Test Stake Unstake etc', () => {
   const provider = anchor.AnchorProvider.local();
   anchor.setProvider(provider);
 
@@ -51,7 +51,6 @@ describe("Test Stake Unstake etc", () => {
       })
     );
     const sigTxFund = await provider.sendAndConfirm(txFund);
-   
   };
 
   //get PDA of Stake Pool
@@ -61,14 +60,14 @@ describe("Test Stake Unstake etc", () => {
   ): Promise<PDAParameters> => {
     let [stake_pool, stake_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("stake_pool"), token_program.toBuffer()],
+        [Buffer.from('stake_pool'), token_program.toBuffer()],
         program.programId
       );
 
     let [pool_action, pool_action_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
-          Buffer.from("pool_action"),
+          Buffer.from('pool_action'),
           signer.toBuffer(),
           token_program.toBuffer(),
         ],
@@ -78,7 +77,7 @@ describe("Test Stake Unstake etc", () => {
     let [lock_pool_action, lock_pool_action_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
-          Buffer.from("lock_pool_action"),
+          Buffer.from('lock_pool_action'),
           signer.toBuffer(),
           token_program.toBuffer(),
         ],
@@ -88,7 +87,7 @@ describe("Test Stake Unstake etc", () => {
     let [withdraw_pool_action, withdraw_pool_action_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
-          Buffer.from("withdraw_pool_action"),
+          Buffer.from('withdraw_pool_action'),
           signer.toBuffer(),
           token_program.toBuffer(),
         ],
@@ -117,7 +116,7 @@ describe("Test Stake Unstake etc", () => {
       let [pool_entry_account, pool_entry_account_bump] =
         await anchor.web3.PublicKey.findProgramAddress(
           [
-            Buffer.from("pool_entry"),
+            Buffer.from('pool_entry'),
             signer.toBuffer(),
             token_mint.toBuffer(),
             new anchor.BN(last_count).toArrayLike(Buffer),
@@ -141,7 +140,7 @@ describe("Test Stake Unstake etc", () => {
   ): Promise<string> => {
     let [pool_count, pool_count_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("pool_count"), signer.toBuffer(), token_mint.toBuffer()],
+        [Buffer.from('pool_count'), signer.toBuffer(), token_mint.toBuffer()],
         program.programId
       );
 
@@ -151,7 +150,7 @@ describe("Test Stake Unstake etc", () => {
 
       return last_count.toString();
     } catch (ex) {
-      return "0".toString();
+      return '0'.toString();
     }
   };
 
@@ -161,7 +160,7 @@ describe("Test Stake Unstake etc", () => {
   ): Promise<anchor.web3.PublicKey> => {
     let [pool_count, pool_count_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("pool_count"), signer.toBuffer(), action_token.toBuffer()],
+        [Buffer.from('pool_count'), signer.toBuffer(), action_token.toBuffer()],
         program.programId
       );
 
@@ -178,7 +177,7 @@ describe("Test Stake Unstake etc", () => {
     let [last_entry_pda, pda_bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
-          Buffer.from("pool_entry"),
+          Buffer.from('pool_entry'),
           signer.toBuffer(),
           token_mint.toBuffer(),
           new anchor.BN(next_count).toArrayLike(Buffer),
@@ -199,7 +198,7 @@ describe("Test Stake Unstake etc", () => {
       amount: entry.tokenAmount,
       action: entry.stakeAction,
       time: entry.timeStamp,
-      confirmed: entry.confirmed
+      confirmed: entry.confirmed,
     };
   };
 
@@ -296,27 +295,24 @@ describe("Test Stake Unstake etc", () => {
     return [user, userAssociatedTokenAccount];
   };
 
-  const getAdminPDA = async(): Promise<anchor.web3.PublicKey> => {
-    const adminConfig =  await anchor.web3.PublicKey.findProgramAddress(
-        [
-          Buffer.from("admin_config"),
-        ],
-        program.programId
-      );
-      return adminConfig[0];
-  }
-
-  const getTokenInterestPDA = async(token_mint: anchor.web3.PublicKey):Promise<anchor.web3.PublicKey> => {
-    const tokenInterest = await anchor.web3.PublicKey.findProgramAddress(
-      [
-        Buffer.from("token_interest"),
-        token_mint.toBuffer()
-      ],
+  const getAdminPDA = async (): Promise<anchor.web3.PublicKey> => {
+    const adminConfig = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from('admin_config')],
       program.programId
     );
-    
+    return adminConfig[0];
+  };
+
+  const getTokenInterestPDA = async (
+    token_mint: anchor.web3.PublicKey
+  ): Promise<anchor.web3.PublicKey> => {
+    const tokenInterest = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from('token_interest'), token_mint.toBuffer()],
+      program.programId
+    );
+
     return tokenInterest[0];
-  }
+  };
 
   const readAccount = async (
     accountPublicKey: anchor.web3.PublicKey
@@ -343,12 +339,11 @@ describe("Test Stake Unstake etc", () => {
       0
     );
 
-
     // PDA for alice
     pda = await getPdaParams(mintAddress, alice.publicKey);
     //check before calling program
     let aliceBalance = await readAccount(aliceTokenAccount);
-    assert.equal(aliceBalance, "20000000");
+    assert.equal(aliceBalance, '20000000');
 
     stakingVaultAssociatedAddress = await spl.getAssociatedTokenAddress(
       mintAddress,
@@ -359,7 +354,7 @@ describe("Test Stake Unstake etc", () => {
     );
   });
 
- it("Update Admin on Config", async () => {
+  it('Update Admin on Config', async () => {
     adminConfig = await getAdminPDA();
 
     let tempAdmin = new anchor.web3.Keypair();
@@ -392,43 +387,40 @@ describe("Test Stake Unstake etc", () => {
     assert.equal(info.admin.toString(), bobAdmin.publicKey.toString());
   });
 
-  it("Update Interest Rate", async() => {
+  it('Update Interest Rate', async () => {
     // Update Interest Rate
     let tokenInterestPda = await getTokenInterestPDA(mintAddress);
 
     let interestRate = 2;
 
-    let txn = await program.rpc.updateInterestRate(
-      interestRate, 
-      {
-        accounts: {
-          admin: bobAdmin.publicKey,
-          tokenInterest: tokenInterestPda,
-          adminConfig: adminConfig,
-          tokenMint: mintAddress,
-          associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
-          tokenProgram: spl.TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        },
-        signers: [bobAdmin],
-      }
+    let txn = await program.rpc.updateInterestRate(interestRate, {
+      accounts: {
+        admin: bobAdmin.publicKey,
+        tokenInterest: tokenInterestPda,
+        adminConfig: adminConfig,
+        tokenMint: mintAddress,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      },
+      signers: [bobAdmin],
+    });
+
+    let tokenInterest = await program.account.interestRate.fetch(
+      tokenInterestPda
     );
-
-    let tokenInterest = await program.account.interestRate.fetch(tokenInterestPda);
-    assert.equal(tokenInterest.interest.toString(), "2");
-
+    assert.equal(tokenInterest.interest.toString(), '2');
   });
 
-  it("Staking", async () => {
-    let staking_amount = "20000000";
+  it('Staking1', async () => {
+    let staking_amount = '10000000';
     let stake_action = true; //Deposite
 
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
     let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
     let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
     let tokenInterestPda = await getTokenInterestPDA(mintAddress);
-
 
     let next_count = parseInt(latest_count) + 1;
     let txn = await program.rpc.performAction(
@@ -458,14 +450,57 @@ describe("Test Stake Unstake etc", () => {
       }
     );
     let aliceBalance = await readAccount(aliceTokenAccount);
-    assert.equal(aliceBalance, "0");
+    assert.equal(aliceBalance, staking_amount);
 
     let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
     assert.equal(stakingVaultBalance, staking_amount);
   });
 
-  it("Withdraw Request", async () => {
-    let un_staking_amount = "500000";
+  it('Staking2', async () => {
+    let staking_amount = '10000000';
+    let stake_action = true; //Deposite
+
+    let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
+    let pool_count_pda = await getEntryCountPDA(alice.publicKey, mintAddress);
+    let latest_count = await getLastEntryCount(alice.publicKey, mintAddress);
+    let tokenInterestPda = await getTokenInterestPDA(mintAddress);
+
+    let next_count = parseInt(latest_count) + 1;
+    let txn = await program.rpc.performAction(
+      new anchor.BN(staking_amount),
+      mintAddress,
+      stake_action,
+      new anchor.BN(next_count),
+      {
+        accounts: {
+          staker: alice.publicKey,
+          currentStakingPool: pda.stake_pool,
+          poolAction: pda.pool_action,
+          lockPoolAction: pda.lock_pool,
+          withdrawPoolAction: pda.withdraw_pool,
+          poolEntry: pool_entry_pda,
+          poolCount: pool_count_pda,
+          tokenInterest: tokenInterestPda,
+          stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+          stakerAssociatedAddress: aliceTokenAccount,
+          tokenMint: mintAddress,
+          associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: spl.TOKEN_PROGRAM_ID,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        },
+        signers: [alice],
+      }
+    );
+    let aliceBalance = await readAccount(aliceTokenAccount);
+    assert.equal(aliceBalance, '0');
+
+    let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
+    assert.equal(stakingVaultBalance, staking_amount * 2);
+  });
+
+  it('Withdraw Request', async () => {
+    let un_staking_amount = '500000';
     let stake_action = false;
 
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
@@ -502,14 +537,14 @@ describe("Test Stake Unstake etc", () => {
       }
     );
     let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
-    assert.equal(stakingVaultBalance, "20000000");
+    assert.equal(stakingVaultBalance, '20000000');
 
     let aliceBalance = await readAccount(aliceTokenAccount);
-    assert.equal(aliceBalance, "0");
+    assert.equal(aliceBalance, '0');
   });
 
-  it("Withdraw Token On Sunday", async () => {
-    let un_staking_amount = "5000000";
+  it('Withdraw Token On Sunday', async () => {
+    let un_staking_amount = '5000000';
     let stake_action = false;
 
     let pool_entry_pda = await getLatestEntryPDA(alice.publicKey, mintAddress);
@@ -541,28 +576,26 @@ describe("Test Stake Unstake etc", () => {
       }
     );
     let stakingVaultBalance = await readAccount(stakingVaultAssociatedAddress);
-    assert.equal(stakingVaultBalance, "15000000");
+    assert.equal(stakingVaultBalance, '15000000');
 
     let aliceBalance = await readAccount(aliceTokenAccount);
     assert.equal(aliceBalance, un_staking_amount);
   });
 
-
-
-  it("Get Deposit/Withdraw Entry Data", async () => {
+  it('Get Deposit/Withdraw Entry Data', async () => {
     let entires = await getPdaStakingEntries(alice.publicKey, mintAddress);
 
     await entires.entries_pda.forEach(async (element, i) => {
       let string_pub_key = element.toString();
       let pub_key = new anchor.web3.PublicKey(string_pub_key);
       let data_from_pda = await getEntryData(pub_key);
-      console.log("===>", i);
-      console.log("Entry Count", i);
-      console.log("Data Action", data_from_pda.action);
-      console.log("Data Amount", data_from_pda.amount.toString());
-      console.log("Data User", data_from_pda.staker.toString());
-      console.log("Data Timestamp", data_from_pda.time.toString());
-      console.log("Data Confirmed ", data_from_pda.confirmed.toString());
+      console.log('===>', i);
+      console.log('Entry Count', i);
+      console.log('Data Action', data_from_pda.action);
+      console.log('Data Amount', data_from_pda.amount.toString());
+      console.log('Data User', data_from_pda.staker.toString());
+      console.log('Data Timestamp', data_from_pda.time.toString());
+      console.log('Data Confirmed ', data_from_pda.confirmed.toString());
     });
   });
 });

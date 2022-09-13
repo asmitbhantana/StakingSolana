@@ -90,15 +90,9 @@ pub mod staking_contract {
                 let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 31536000) as u64;
                 withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
                 
-                if locked_pool_action.locked_amount.len() > 1{
-                    
-                    locked_pool_action.locked_amount[n] = locked_pool_action.locked_amount[locked_pool_action.locked_amount.len()];
-                    locked_pool_action.locked_start_time[n] = locked_pool_action.locked_start_time[locked_pool_action.locked_start_time.len()];
-                    
-                    locked_pool_action.locked_amount.pop();
-                    locked_pool_action.locked_start_time.pop();
-                }
-
+                locked_pool_action.locked_start_time[n] = 0;
+                locked_pool_action.locked_amount[n] = 0;
+            
             // }
             // }
             // else{
@@ -242,6 +236,7 @@ pub mod staking_contract {
     ) -> Result<()>{
         let token_mint_key = ctx.accounts.token_mint.clone().key();
         let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
+       let staking_pool = &mut ctx.accounts.current_staking_pool;
 
          //Transfer Funds
         let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
@@ -264,9 +259,12 @@ pub mod staking_contract {
             signer,
         );
         anchor_spl::token::transfer(cpi_ctx, withdraw_amount)?;
-            
+        staking_pool.token_amount -= withdraw_amount;
+
         Ok(())
     }
+
+
  }
 #[derive(Accounts)]
 #[instruction(action_amount: u64, action_token: Pubkey, stake_action: bool, count: u8)]
@@ -302,7 +300,7 @@ pub struct PerformAction<'info> {
     #[account(
         init_if_needed,
         payer = staker, 
-        space = 8 + 4 + 160, //8*2*10
+        space = 8 + 4 + 8*2*10, //8*2*10
         seeds = [
             b"lock_pool_action".as_ref(),
             staker.key().as_ref(),
