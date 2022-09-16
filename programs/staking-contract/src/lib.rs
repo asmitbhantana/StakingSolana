@@ -37,6 +37,7 @@ pub mod staking_contract {
        let pool_count = &mut ctx.accounts.pool_count;
 
        require!(token_program.key() == action_token, ErrorCode::InvalidToken);  
+    
 
        //Stake Action
        if stake_action {
@@ -160,6 +161,8 @@ pub mod staking_contract {
 
         let token_mint_key = ctx.accounts.token_mint.clone().key();
         let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
+
+        require!(ctx.accounts.current_staking_pool.token_amount >= claim_amount, ErrorCode::ExceedPoolAmount );
 
         let day_of_week = (current_time/86400 + 4)%7;
         //TODO::Uncomment on production
