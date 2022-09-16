@@ -604,6 +604,30 @@ describe('Test Stake Unstake etc', () => {
     assert.equal(adminBalance, withdraw_amount);
   });
 
+  it('Deposit Token By Admin', async () => {
+    let deposit_amount = '199999';
+    let initialAdminBalance = await readAccount(bobAdminTokenAccount);
+
+    let txn = await program.rpc.depositToken(new anchor.BN(deposit_amount), {
+      accounts: {
+        owner: bobAdmin.publicKey,
+        currentStakingPool: pda.stake_pool,
+        adminConfig: adminConfig,
+        stakingVaultAssociatedAddress: stakingVaultAssociatedAddress,
+        adminAssociatedAddress: bobAdminTokenAccount,
+        tokenMint: mintAddress,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      },
+      signers: [bobAdmin],
+    });
+
+    let adminBalance = await readAccount(bobAdminTokenAccount);
+    assert.equal(adminBalance, initialAdminBalance-deposit_amount);
+  });
+
   it('Get Deposit/Withdraw Entry Data', async () => {
     let entires = await getPdaStakingEntries(alice.publicKey, mintAddress);
 
