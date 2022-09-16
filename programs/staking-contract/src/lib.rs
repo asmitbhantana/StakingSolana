@@ -234,9 +234,12 @@ pub mod staking_contract {
         ctx: Context<WithdrawToken>,
         withdraw_amount: u64
     ) -> Result<()>{
+
         let token_mint_key = ctx.accounts.token_mint.clone().key();
         let current_staking_pool_account = ctx.accounts.current_staking_pool.clone().to_account_info();
        let staking_pool = &mut ctx.accounts.current_staking_pool;
+
+        require!(staking_pool.token_amount >= withdraw_amount, ErrorCode::ExceedPoolAmount );
 
          //Transfer Funds
         let bump_seed_staking_pool = ctx.bumps.get("current_staking_pool").unwrap().to_le_bytes();
@@ -742,6 +745,9 @@ pub enum ErrorCode {
 
     #[msg("Invalid Admin")]
     InvalidAdmin,
+
+    #[msg("Amount Exceeds Pool Amount")]
+    ExceedPoolAmount,
 
 
 }
