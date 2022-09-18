@@ -625,7 +625,7 @@ describe('Test Stake Unstake etc', () => {
     });
 
     let adminBalance = await readAccount(bobAdminTokenAccount);
-    assert.equal(adminBalance, initialAdminBalance-deposit_amount);
+    assert.equal(adminBalance, initialAdminBalance - deposit_amount);
   });
 
   it('Get Deposit/Withdraw Entry Data', async () => {

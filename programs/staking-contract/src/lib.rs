@@ -88,7 +88,7 @@ pub mod staking_contract {
             ////TODO::Uncomment on production
             // if withdraw_pool_action.requested_amount < action_amount {
             // if locked_start_times[n] + 1296000 < current_time {
-                let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 31536000) as u64;
+                let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 31536000_0000) as u64;
                 withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
                 
                 locked_pool_action.locked_start_time[n] = 0;
@@ -104,8 +104,7 @@ pub mod staking_contract {
         require!(withdraw_pool_action.requested_amount >= action_amount, ErrorCode::LockingPeriod);
 
        
-        // Update Pool Action
-        require!(pool_action.token_amount >= action_amount && staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
+        require!(staking_pool.token_amount >= action_amount, ErrorCode::NotEnoughToken);
         pool_action.token_amount -= action_amount;
 
         //Update Withdraw Pool Time
