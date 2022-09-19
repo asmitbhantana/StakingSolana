@@ -88,14 +88,14 @@ pub mod staking_contract {
             ////TODO::Uncomment on production
             // if withdraw_pool_action.requested_amount < action_amount {
             // if locked_start_times[n] + 1296000 < current_time {
-                // let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 31536000_0000) as u64;
-                // withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
-                withdraw_pool_action.requested_amount += action_amount;
+                let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 30842500_000) as u64;
+                withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
+                // withdraw_pool_action.requested_amount += action_amount;
                 
                 locked_pool_action.locked_start_time[n] = 0;
                 locked_pool_action.locked_amount[n] = 0;
             
-            // }
+            }
             // }
             // else{
             //     break;
@@ -692,8 +692,8 @@ pub struct PoolAction{
 #[account]
 #[derive(Default)]
 pub struct LockedPool{
-    locked_amount: Vec<u64>,
-    locked_start_time: Vec<i64>
+    locked_amount: Vec<u64>,  // 100000
+    locked_start_time: Vec<i64> // 23456666
 }
 
 #[account]
