@@ -37,7 +37,11 @@ pub mod staking_contract {
        let pool_count = &mut ctx.accounts.pool_count;
 
        require!(token_program.key() == action_token, ErrorCode::InvalidToken);  
-    
+        
+        //Update the Unlocked token
+        let locked_amounts =  locked_pool_action.locked_amount.clone();
+        let locked_start_times =  locked_pool_action.locked_start_time.clone();
+        let total_length = locked_amounts.len();
 
        //Stake Action
        if stake_action {
@@ -59,10 +63,22 @@ pub mod staking_contract {
 
         //Update Staking Pool
         staking_pool.token_amount += action_amount;
+        
+        let mut pool_updated = false;
 
-        //Update lock pool action
-        locked_pool_action.locked_amount.push(action_amount);
-        locked_pool_action.locked_start_time.push(current_time);
+        for n in 0..total_length {
+            if locked_amounts[n] == locked_start_times[n] as u64 && locked_start_times[n] == 0{
+                //Update lock pool action
+                locked_pool_action.locked_amount[n] = action_amount;
+                locked_pool_action.locked_start_time[n] = current_time;
+                pool_updated = true;
+                break;
+            }
+        }
+        if !pool_updated{
+            locked_pool_action.locked_amount.push(action_amount);
+            locked_pool_action.locked_start_time.push(current_time);
+        }
 
         //Update Pool Action Entry 
         pool_action_entry.confirmed = true;
@@ -78,27 +94,20 @@ pub mod staking_contract {
         let day_of_week = (current_time/86400 + 4)%7;
         require!(day_of_week != 1, ErrorCode::InvalidWithdrawDay);
 
-        //Update the Unlocked token
-        let locked_amounts =  locked_pool_action.locked_amount.clone();
-        let locked_start_times =  locked_pool_action.locked_start_time.clone();
-        
-        let total_length = locked_amounts.len();
-
         for n in 0..total_length {
             ////TODO::Uncomment on production
-            // if withdraw_pool_action.requested_amount < action_amount {
             // if locked_start_times[n] + 1296000 < current_time {
-                let interest_amount = locked_pool_action.locked_amount[n] as u64 * current_interest * ((current_time -  locked_pool_action.locked_start_time[n]) / 30842500_000) as u64;
+                let interest_amount = (current_time -  locked_pool_action.locked_start_time[n]) as u64 * (((current_interest/31536000)*locked_pool_action.locked_amount[n] as u64)/100) as u64;
                 withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
-                // withdraw_pool_action.requested_amount += action_amount;
                 
-                locked_pool_action.locked_start_time[n] = 0;
-                locked_pool_action.locked_amount[n] = 0;
-            
-            }
-            // }
-            // else{
-            //     break;
+                if withdraw_pool_action.requested_amount > action_amount{
+                    locked_pool_action.locked_amount[n] = withdraw_pool_action.requested_amount - action_amount;
+                    withdraw_pool_action.requested_amount = action_amount;
+                }
+                else{
+                    locked_pool_action.locked_start_time[n] = 0;
+                    locked_pool_action.locked_amount[n] = 0;
+                }
             // }
         }
         //Check Unlocked Amount i.e. exceeded 15 days Locking
