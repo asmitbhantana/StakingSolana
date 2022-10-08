@@ -94,15 +94,18 @@ pub mod staking_contract {
         let day_of_week = (current_time/86400 + 4)%7;
         require!(day_of_week != 1, ErrorCode::InvalidWithdrawDay);
 
+        //withdraw action amount update
+        let withdraw_action_amount = withdraw_pool_action.requested_amount + action_amount;
+
         for n in 0..total_length {
             ////TODO::Uncomment on production
             // if locked_start_times[n] + 1296000 < current_time {
                 let interest_amount = (current_time -  locked_pool_action.locked_start_time[n]) as u64 * (((current_interest/31536000)*locked_pool_action.locked_amount[n] as u64)/100) as u64;
                 withdraw_pool_action.requested_amount += locked_pool_action.locked_amount[n] + interest_amount;
                 
-                if withdraw_pool_action.requested_amount > action_amount{
-                    locked_pool_action.locked_amount[n] = withdraw_pool_action.requested_amount - action_amount;
-                    withdraw_pool_action.requested_amount = action_amount;
+                if withdraw_pool_action.requested_amount > withdraw_action_amount{
+                    locked_pool_action.locked_amount[n] = withdraw_pool_action.requested_amount - withdraw_action_amount;
+                    withdraw_pool_action.requested_amount = withdraw_action_amount;
                 }
                 else{
                     locked_pool_action.locked_start_time[n] = 0;
