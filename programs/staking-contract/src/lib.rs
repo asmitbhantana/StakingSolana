@@ -124,7 +124,7 @@ pub mod staking_contract {
         withdraw_pool_action.requested_time = current_time;
         
         //Update Staking Pool
-        staking_pool.token_amount -= action_amount;
+        // staking_pool.token_amount -= action_amount;
 
         //Update Pool Action Entry 
         pool_action_entry.confirmed = false;
@@ -212,6 +212,9 @@ pub mod staking_contract {
         pool_action_entry.confirmed = true;
 
         pool_count.count = count;
+
+        //Reduce Token Amount on Staking Pool
+        ctx.accounts.current_staking_pool.token_amount -= claim_amount;
 
         Ok(())
     }
@@ -740,7 +743,7 @@ pub struct Count{
 #[error_code]
 pub enum ErrorCode {
 
-    #[msg("Not Enough Token")]
+    #[msg("You can Withdraw After 1 Week!")]
     NotEnoughToken,
 
     #[msg("Not Valid Token")]
