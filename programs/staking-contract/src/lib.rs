@@ -764,7 +764,7 @@ pub enum ErrorCode {
     #[msg("Invalid Admin")]
     InvalidAdmin,
 
-    #[msg("Amount Exceeds Pool Amount")]
+    #[msg("Our team is working on your withdrawal, please wait till Sunday at 17.00 UTC in order to claim your rewards")]
     ExceedPoolAmount,
 
 
